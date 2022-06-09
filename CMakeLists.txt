@@ -11,7 +11,7 @@ find_package(glfw3 REQUIRED)
 
 add_executable(ImCalc
   main.cpp
-  imgui_impl_glfw.cpp
-  imgui_impl_opengl3.cpp)
+  bindings/imgui_impl_glfw.cpp
+  bindings/imgui_impl_opengl3.cpp)
 
 target_link_libraries(ImCalc PRIVATE imgui::imgui glfw::glfw GLEW::GLEW)

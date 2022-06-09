@@ -1,72 +1,34 @@
-// dear imgui: standalone example application for GLFW + OpenGL 3, using
-// programmable pipeline If you are new to dear imgui, see examples/README.txt
-// and documentation at the top of imgui.cpp. (GLFW is a cross-platform general
-// purpose library for handling windows, inputs, OpenGL/Vulkan/Metal graphics
-// context creation, etc.)
-//[headers Headers
-#include "imgui.h"
-//]
-//[headers_glfw GLFW backend headers
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-//]
+#include <imgui.h>
+// needs to be after imgui
+#include "bindings/imgui_impl_glfw.h"
+#include "bindings/imgui_impl_opengl3.h"
+
+// Include glfw3.h after our OpenGL definitions
+#include <GL/glew.h> // Initialize with glewInit()
+// After GL
+#include <GLFW/glfw3.h>
+
+// Standard lib includes
 #include <array>
 #include <iostream>
 #include <stdio.h>
 #include <string>
 #include <vector>
 
-// About Desktop OpenGL function loaders:
-//  Modern desktop OpenGL doesn't have a standard portable header file to load
-//  OpenGL function pointers. Helper libraries are often used for this purpose!
-//  Here we are supporting a few common ones (gl3w, glew, glad). You may use
-//  another loader/header of your choice (glext, glLoadGen, etc.), or chose to
-//  manually implement your own.
-//[load_glad Load OpenGL functions
-#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
-#include <GL/gl3w.h> // Initialize with gl3wInit()
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
-#include <GL/glew.h> // Initialize with glewInit()
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
-#include <glad/glad.h> // Initialize with gladLoadGL()
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING2)
-#define GLFW_INCLUDE_NONE // GLFW including OpenGL headers causes ambiguity or
-                          // multiple definition errors.
-#include <glbinding/Binding.h> // Initialize with glbinding::Binding::initialize()
-#include <glbinding/gl/gl.h>
-//]
-
-using namespace gl;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING3)
-#define GLFW_INCLUDE_NONE // GLFW including OpenGL headers causes ambiguity or
-                          // multiple definition errors.
-#include <glbinding/gl/gl.h>
-#include <glbinding/glbinding.h> // Initialize with glbinding::initialize()
-using namespace gl;
-#else
-#include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
-#endif
-
-// Include glfw3.h after our OpenGL definitions
-#include <GLFW/glfw3.h>
-
-// [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to
-// maximize ease of testing and compatibility with old VS compilers. To link
-// with VS2010-era libraries, VS2015+ requires linking with
-// legacy_stdio_definitions.lib, which we do using this pragma. Your own project
-// should not be affected, as you are likely to link with a newer binary of GLFW
-// that is adequate for your version of Visual Studio.
-#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
-#pragma comment(lib, "legacy_stdio_definitions")
-#endif
-
 namespace
 {
-    struct Button
+    enum class TextButtonPurpose
+    {
+        AddToBuffer,
+        ClearAll
+    };
+
+    struct TextButton
     {
         std::string text;
         int col;
         int row;
+        TextButtonPurpose purpose;
     };
 
     struct TextBuffer
@@ -92,9 +54,15 @@ namespace
                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
             ImGui::Begin("Calculator Window", &should_open, flags);
 
-            std::vector<Button> const buttons{{"1", 0, 0}, {"2", 1, 0}, {"3", 2, 0}, {"*", 3, 0}, {"4", 0, 1},
-                {"5", 1, 1}, {"6", 2, 1}, {"/", 3, 1}, {"7", 0, 2}, {"8", 1, 2}, {"9", 2, 2}, {"M", 3, 2}, {"+", 0, 3},
-                {"0", 1, 3}, {"-", 2, 3}, {"L", 3, 3}};
+            std::vector<TextButton> const buttons{{"1", 0, 0, TextButtonPurpose::AddToBuffer},
+                {"2", 1, 0, TextButtonPurpose::AddToBuffer}, {"3", 2, 0, TextButtonPurpose::AddToBuffer},
+                {"*", 3, 0, TextButtonPurpose::AddToBuffer}, {"4", 0, 1, TextButtonPurpose::AddToBuffer},
+                {"5", 1, 1, TextButtonPurpose::AddToBuffer}, {"6", 2, 1, TextButtonPurpose::AddToBuffer},
+                {"/", 3, 1, TextButtonPurpose::AddToBuffer}, {"7", 0, 2, TextButtonPurpose::AddToBuffer},
+                {"8", 1, 2, TextButtonPurpose::AddToBuffer}, {"9", 2, 2, TextButtonPurpose::AddToBuffer},
+                {"=", 3, 2, TextButtonPurpose::AddToBuffer}, {"+", 0, 3, TextButtonPurpose::AddToBuffer},
+                {"0", 1, 3, TextButtonPurpose::AddToBuffer}, {"-", 2, 3, TextButtonPurpose::AddToBuffer},
+                {"C", 3, 3, TextButtonPurpose::ClearAll}};
 
             ImVec2 const button_size{calc_width / cols, calc_height / rows};
 
@@ -123,9 +91,18 @@ namespace
                         ImGui::TableSetColumnIndex(button.col);
                         if (ImGui::Button(button.text.c_str(), button_size))
                         {
-                            std::copy(
-                                begin(button.text), end(button.text), begin(text_buffer.buff) + text_buffer.curr_index);
-                            text_buffer.curr_index += button.text.size();
+                            switch (button.purpose)
+                            {
+                            case TextButtonPurpose::AddToBuffer:
+                                std::copy(begin(button.text), end(button.text),
+                                    begin(text_buffer.buff) + text_buffer.curr_index);
+                                text_buffer.curr_index += button.text.size();
+                                break;
+                            case TextButtonPurpose::ClearAll:
+                                std::fill_n(begin(text_buffer.buff), text_buffer.curr_index, 0);
+                                text_buffer.curr_index = 0;
+                                break;
+                            }
                         }
                     }
                     ImGui::EndTable(); // buttonTable
@@ -204,48 +181,14 @@ int main(int, char**)
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     (void) io;
-    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable
-    // Keyboard Controls io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; //
-    // Enable Gamepad Controls
 
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsClassic();
 
-    // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
-    //]
 
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can
-    // also load multiple fonts and use ImGui::PushFont()/PopFont() to select
-    // them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you
-    // need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return NULL. Please
-    // handle those errors in your application (e.g. use an assertion, or
-    // display an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and
-    // stored into a texture when calling
-    // ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame
-    // below will call.
-    // - Read 'docs/FONTS.txt' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string
-    // literal you need to write a double backslash \\ !
-    // io.Fonts->AddFontDefault();
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
-    // ImFont* font =
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f,
-    // NULL, io.Fonts->GetGlyphRangesJapanese()); IM_ASSERT(font != NULL);
 
-    // Our state
-    bool show_demo_window    = false;
-    bool show_another_window = false;
-    ImVec4 clear_color       = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // TextBuffer For Calc
     TextBuffer text_buffer{{}, 0};
@@ -253,26 +196,14 @@ int main(int, char**)
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to
-        // tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data
-        // to your main application.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input
-        // data to your main application. Generally you may always pass all
-        // inputs to dear imgui, and hide them from your application based on
-        // those two flags.
         glfwPollEvents();
 
-        //[loop_frame Start the Dear ImGui frame for the iteration
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        //]
 
         createCalculatorWindow(text_buffer);
 
-        //[imgui_render Rendering
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -280,16 +211,13 @@ int main(int, char**)
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        //]
 
         glfwSwapBuffers(window);
     }
 
-    //[imgui_terminate Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-    //]
 
     glfwDestroyWindow(window);
     glfwTerminate();
