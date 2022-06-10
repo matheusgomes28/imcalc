@@ -13,6 +13,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -36,6 +37,68 @@ namespace
         std::array<char, sizeof(char) * 48> buff;
         int curr_index;
     };
+
+    constexpr std::string_view vertex_shader{
+        R"(
+#version 130
+in mediump vec3 point;
+in mediump vec2 texcoord;
+out mediump vec2 UV;
+void main()
+{
+    gl_Position = vec4(point, 1);
+    UV          = texcoord;
+}
+    )"};
+
+    constexpr std::string_view fragment_shader{
+        R"(
+#version 130
+in mediump vec2 UV;
+out mediump vec3 fragColor;
+uniform sampler2D tex;
+void main()
+{
+  fragColor = texture(tex, UV).rgb;
+}
+    )"};
+
+
+    bool createShaders(std::string_view vertex, std::string_view fragment)
+    {
+        {
+            GLuint vertexShader           = glCreateShader(GL_VERTEX_SHADER);
+            GLint vertexShaderSize        = vertex.size();
+            const char* vertexDataPointer = vertex.data();
+            glShaderSource(vertexShader, 1, &vertexDataPointer, &vertexShaderSize);
+            glCompileShader(vertexShader);
+
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                std::cout << "vertex shader was probably not compiled\n";
+                return false;
+            }
+        }
+
+        {
+            GLuint fragmentShader           = glCreateShader(GL_FRAGMENT_SHADER);
+            GLint fragmentShaderSize        = fragment.size();
+            const char* fragmentDataPointer = fragment.data();
+            glShaderSource(fragmentShader, 1, &fragmentDataPointer, &fragmentShaderSize);
+            glCompileShader(fragmentShader);
+
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                std::cout << "fragment shader was probably not compiled\n";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 
     void createCalculatorWindow(TextBuffer& text_buffer)
     {
@@ -128,22 +191,12 @@ int main(int, char**)
     if (!glfwInit())
         return 1;
 
-        // Decide GL+GLSL versions
-#if __APPLE__
-    // GL 3.2 + GLSL 150
-    const char* glsl_version = "#version 150";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Required on Mac
-#else
+    // Decide GL+GLSL versions
+
     // GL 3.0 + GLSL 130
     const char* glsl_version = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+
-    // only glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // 3.0+ only
-#endif
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     // Create window with graphics context
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", NULL, NULL);
@@ -153,23 +206,13 @@ int main(int, char**)
     glfwSwapInterval(1); // Enable vsync
     //]
 
-    // Initialize OpenGL loader
-#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
-    bool err = gl3wInit() != 0;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
-    bool err = glewInit() != GLEW_OK;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
-    bool err = gladLoadGL() == 0;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING2)
+    if (glewInit() != GLEW_OK)
+    {
+        std::cout << "error initialising glew\n";
+        return -1;
+    }
+
     bool err = false;
-    glbinding::Binding::initialize();
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING3)
-    bool err = false;
-    glbinding::initialize([](const char* name) { return (glbinding::ProcAddress) glfwGetProcAddress(name); });
-#else
-    bool err = false; // If you use IMGUI_IMPL_OPENGL_LOADER_CUSTOM, your loader
-                      // is likely to requires some form of initialization.
-#endif
     if (err)
     {
         fprintf(stderr, "Failed to initialize OpenGL loader!\n");
@@ -193,6 +236,12 @@ int main(int, char**)
     // TextBuffer For Calc
     TextBuffer text_buffer{{}, 0};
 
+    if (!createShaders(vertex_shader, fragment_shader))
+    {
+        std::cout << "error\n";
+        return -1;
+    }
+
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
@@ -201,6 +250,21 @@ int main(int, char**)
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+
+        // Drawing a sphere
+        {
+            std::string vertex_shader = R"()";
+            std::vector<float> const vertices;
+
+
+            GLuint vertex_buffer = 0;
+            GLsizeiptr data_size = vertices.size() * sizeof(float);
+            glGenBuffers(1, &vertex_buffer);
+            glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+            glBufferData(GL_ARRAY_BUFFER, data_size, 0, GL_STATIC_DRAW);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, data_size, vertices.data());
+        }
 
         createCalculatorWindow(text_buffer);
 
